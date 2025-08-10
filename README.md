@@ -1,13 +1,13 @@
-## rottabotti discordiin
+# rottabotti discordiin
 
 tällä hetkellä rottabotti pystyy vaihtaan käyttäjien nimiä ja toimiin perus musabottina.
 
 
-nimifunktiot:
+### nimifunktiot:
   
 **/nimi** input 2 asiaa, eka käyttäjä kenen nimi vaihetaan, sitte se nimi mihin se vaihetaan
   
-Musabottifunktiot:
+### Musabottifunktiot:
   
 **/soita** ettii youtubesta annettavan queryn, ja soittaa ensimmäisen tuloksen
   
