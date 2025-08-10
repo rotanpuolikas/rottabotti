@@ -18,7 +18,17 @@ tällä hetkellä rottabotti pystyy vaihtaan käyttäjien nimiä ja toimiin peru
 **/jono** näyttää jonon...
   
 **/liity** laittaa botin liittyyn sille kanavalle missä sää oot, lähinnä debugaustarkotuksiin
+
+### Filtterit
   
-**/bass** laittaa päälle ffmpeg filtterin, säätää 40 desibelin lähialueita annettavalla määrällä, range -50dB -> 50dB, default 10 jos ei muuta inputtia
+Kaikkia näitä edeltää **/filter**, eli koko syntaksi olisi **/filterbass**
+
+**bass** laittaa päälle ffmpeg filtterin, säätää 40 desibelin lähialueita annettavalla määrällä, range -50dB -> 50dB, default 10 jos ei muuta inputtia
+
+**tempo** nostaa tai laskee tempoa prosentuaalisesti, ei vaikuta säveltaajuuteen. range -50% -> 100%, default 0
+
+**pitch** nostaa tai laskee säveltaajuutta, vaikuttaa tempoon. range 0.5 -> 2, default 1
+
+**anime** on basically nightcore filtteri, laittaa kimeän animetylleröäänen ja nopeuttaa biisiä
   
-**/filterpois** et varmaan koskaan arvaa mitä tää tekkee
+**filterpois** et varmaan koskaan arvaa mitä tää tekkee

@@ -251,7 +251,7 @@ async def stop(interaction: discord.Interaction):
 
 #filtterit
 
-@bot.tree.command(name="bass", description="muumit massive bass")
+@bot.tree.command(name="filterbass", description="muumit massive bass")
 @app_commands.describe(gain="monellako desibelillä buustataan, max 50, min -50")
 async def bass(interaction: discord.Interaction, gain: int = 10):
     guild_id = interaction.guild.id
@@ -289,7 +289,7 @@ async def bass(interaction: discord.Interaction, gain: int = 10):
     await restart_with_filter(interaction, elapsed)
 
 
-@bot.tree.command(name="animemoodi", description="anime moodi")
+@bot.tree.command(name="filteranime", description="anime moodi")
 async def anime(interaction: discord.Interaction):
     guild_id = interaction.guild.id
     vc = interaction.guild.voice_client
@@ -322,9 +322,9 @@ async def anime(interaction: discord.Interaction):
         
 
 
-@bot.tree.command(name="tempo", description="tempo muutos komento")
+@bot.tree.command(name="filtertempo", description="tempo muutos komento")
 @app_commands.describe(tempo="montaks prosenttii muutetaan, max 100, min -50")
-async def tempo(interaction: discord.Interaction, tempo: int = 20):
+async def tempo(interaction: discord.Interaction, tempo: int = 0):
     guild_id = interaction.guild.id
     vc = interaction.guild.voice_client
 
@@ -357,9 +357,9 @@ async def tempo(interaction: discord.Interaction, tempo: int = 20):
     elapsed = int(time.time() - start_times.get(guild_id, 0))
     await restart_with_filter(interaction, elapsed)
 
-@bot.tree.command(name="pitch", description="tekkee semmosen gigachad tai anime version biisistä")
+@bot.tree.command(name="filterpitch", description="tekkee semmosen gigachad tai anime version biisistä")
 @app_commands.describe(amount="kui palijo (1.0 = normi, 1.5 = anime, 0.8 = gigachad)")
-async def pitch(interaction: discord.Interaction, amount: float):
+async def pitch(interaction: discord.Interaction, amount: float = 1.0):
     if amount < 0.5: amount = 0.5
     elif amount > 2: amount = 2
 
