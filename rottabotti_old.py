@@ -1,0 +1,436 @@
+import discord
+from discord import app_commands
+from discord.ext import commands
+import yt_dlp as youtube_dl
+import asyncio
+import time
+
+#max query pituus sanitizatioo varten
+MAX_QUERY_LENGTH = 100
+
+# members intent päälle
+intents = discord.Intents.default()
+intents.members = True
+
+bot = commands.Bot(command_prefix="!", intents=intents)
+
+# audio formaatti ja ffmpeg asiat
+ytdl_format_options = {
+    "format": "bestaudio/best",
+    "quiet": True,
+    "extract_flat": False,
+    "overwrite": True
+}
+ffmpeg_options = {
+    "options": "-vn -reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"  # audio only
+}
+
+ffmpeg_base_before = "-reconnect 1 -reconnect_streamed 1 -reconnect_delay_max 5"
+ytdl = youtube_dl.YoutubeDL(ytdl_format_options)
+
+
+#kaikki storaget kirjastoina
+queues = {}
+
+filters = {}
+
+current_track = {}  # {guild_id: (url, title)}
+
+start_times = {}
+
+def get_filter_str(guild_id):
+    if filters.get(guild_id):
+        return "-af " + ",".join(filters[guild_id])
+    return ""
+
+def build_ffmpeg_options(guild_id: int) -> str:
+    """
+    Builds the ffmpeg options string with all active filters.
+    Always outputs correct syntax for ffmpeg.
+    """
+    ffmpeg_opts = "-vn"  # no video
+    if filters.get(guild_id):
+        chain = ",".join(filters[guild_id])
+        ffmpeg_opts += f' -af "{chain}"'
+    return ffmpeg_opts
+
+def play_track(ctx, url: str, title: str, seek_seconds: int = 0):
+    """
+    Plays the given track in the guild's voice client, applying any active filters.
+    """
+    guild_id = ctx.guild.id
+    seek_opt = f"{ffmpeg_base_before} -ss {seek_seconds}" if seek_seconds > 0 else ffmpeg_base_before
+    ffmpeg_opts = build_ffmpeg_options(guild_id)
+
+    vc = ctx.guild.voice_client
+    if vc.is_playing():
+        for i in range(10):
+            if not vc.is_playing():
+                break
+            asyncio.sleep(0.1)
+    vc.play(
+        discord.FFmpegPCMAudio(
+            url,
+            before_options=seek_opt,
+            options=ffmpeg_opts
+        ),
+        after=lambda e: play_next(ctx)
+    )
+
+    current_track[guild_id] = (url, title)
+    start_times[guild_id] = time.time() - seek_seconds
+
+async def restart_with_filter(ctx, elapsed: int):
+    """
+    Stops and restarts the current track from the elapsed time with updated filters.
+    """
+    guild_id = ctx.guild.id
+    vc = ctx.guild.voice_client
+    if not vc or not vc.is_connected() or guild_id not in current_track:
+        return
+
+    url, title = current_track[guild_id]
+    seek_opt = f"{ffmpeg_base_before} -ss {elapsed}" if elapsed > 0 else ffmpeg_base_before
+    ffmpeg_opts = build_ffmpeg_options(guild_id)
+
+    vc.stop()
+    for _ in range(10):
+        if not vc.is_playing():
+            break
+        asyncio.sleep(0.1)
+    
+    print("restart with filter")
+    vc.play(
+        discord.FFmpegPCMAudio(
+            url,
+            before_options=seek_opt,
+            options=ffmpeg_opts
+        ),
+        after=lambda e: play_next(ctx)
+    )
+
+    start_times[guild_id] = time.time() - elapsed
+
+
+def play_next(ctx):
+    guild_id = ctx.guild.id
+    if queues.get(guild_id):
+        url, title = queues[guild_id].pop(0)
+        play_track(ctx, url, title)
+    else:
+        # ei mitään jonossa
+        current_track.pop(guild_id, None)
+        start_times.pop(guild_id, None)
+
+
+
+async def check_voice_channel_empty(vc):
+    # vc = VoiceClient instance
+    wait_time = 0
+    while vc.is_connected():
+        channel = vc.channel
+        # Count how many non-bot members are in the channel
+        non_bot_members = [m for m in channel.members if not m.bot]
+
+        if len(non_bot_members) == 0:
+            if wait_time == 0:
+                print("ei muita puhelussa, lähetään in 5 seconds")
+            wait_time += 1
+            if wait_time >= 5:
+                await vc.disconnect()
+                print("lähettiin koska inaktiivinen")
+                return
+        else:
+            wait_time = 0
+        await asyncio.sleep(1)
+
+with open("/opt/rottabotti/.env", "r") as f:
+    TOKEN=f.read().strip()
+
+@bot.event
+async def on_ready():
+    print(f"Logged in as {bot.user}")
+    try:
+        synced = await bot.tree.sync()
+        print(f"Synced {len(synced)} slash commands")
+    except Exception as e:
+        print(f"Error syncing commands: {e}")
+
+@bot.tree.command(name="nimi", description="vaiha jonku nimi")
+@app_commands.describe(
+    target="kenen nimi vaihetaan",
+    new_name="mikä nimi annetaan"
+)
+async def name_command(interaction: discord.Interaction, target: discord.Member, new_name: str):
+    # Check if the bot has permission
+    if not interaction.user.guild_permissions.manage_nicknames:
+        await interaction.response.send_message("❌ sää et voi jonku takia vaihella nimiä", ephemeral=True)
+        return
+
+    try:
+        await target.edit(nick=new_name)
+        await interaction.response.send_message(f"✅ vaihettiin {target.mention}:n nimeksi **{new_name}**, nauttikoot uudesta nimestään", ephemeral=True)
+    except discord.Forbidden:
+        await interaction.response.send_message("❌ HÄHÄÄÄ et voi vaihtaa mun nimmee t rotta >:))", ephemeral=True)
+    except Exception as e:
+        await interaction.response.send_message(f"⚠️ apua soz mega virhe kaikki paskaksi: {e}", ephemeral=False)
+
+
+#join komento
+
+@bot.tree.command(name="liity", description="pakota botti liittyyn just sun kanavalle, lähinnä debuggausta varten")
+@app_commands.describe()
+async def join(interaction: discord.Interaction):
+    if not interaction.user.voice or not interaction.user.voice.channel:
+        await interaction.response.send_message("❌ mee eka kanavalle", ephemeral=True)
+        return
+
+    voice_channel = interaction.user.voice.channel
+    if not interaction.guild.voice_client:
+        try:
+            await voice_channel.connect()
+            await interaction.response.send_message("liitytty", ephemeral=True)
+        except:
+            await interaction.response.send_message("joku failas joinaamisessa, maybe permission issue, maybe bot crash, en tiiä", ephemeral=False)
+
+
+# ==== /play COMMAND ====
+@bot.tree.command(name="soita", description="eti biisi youtubeta ja soita (tai lisää queueen)")
+@app_commands.describe(query="biisin nimi tai youtupe urli")
+async def play(interaction: discord.Interaction, query: str):
+    if not interaction.user.voice or not interaction.user.voice.channel:
+        await interaction.response.send_message("❌ mee eka kanavalle", ephemeral=True)
+        return
+
+    voice_channel = interaction.user.voice.channel
+    if not interaction.guild.voice_client:
+        try:
+            await voice_channel.connect()
+        except:
+            return
+
+    await interaction.response.send_message(f"🔍 etitään youtupesta: `{query}`", ephemeral=True)
+
+    try:
+        if len(query) > MAX_QUERY_LENGTH:
+            await interaction.followup.send("hei liian pitkä query, either koitit tehä jotain ilkeetä tai sitte sulla on tosi pitkä linkki, either way ei onnaa nyt tämmönen hei")
+            return
+        try:
+            query = ''.join(c for c in query if c.isprintable())
+            query = discord.utils.escape_markdown(query)
+        except:
+            await interaction.followup.send("sun query oli jotenki ilikee, en suostu prosessoimaan >:(")
+            return
+        info = ytdl.extract_info(f"ytsearch:{query}", download=False)["entries"][0]
+        url = info["url"]
+        title = info["title"]
+    except Exception as e:
+        await interaction.followup.send(f"⚠️ virhe, joko en löytäny tai sitte exception: {e}", ephemeral=True)
+        await interaction.followup.send(f"jos virhe on 'list index out of range', todnäk yritit laittaa playlistiä mikä eioo mahollista", ephemeral=True)
+        return
+
+    guild_id = interaction.guild.id
+    if guild_id not in queues:
+        queues[guild_id] = []
+
+    vc = interaction.guild.voice_client
+    if not vc.is_playing():
+        bot.loop.create_task(check_voice_channel_empty(vc))
+        play_track(interaction, url, title)
+        await interaction.followup.send(f"🎵 ny soi: **{title}**", ephemeral=False)
+    else:
+        queues[guild_id].append((url, title))
+        await interaction.followup.send(f"lisättiin queueen: **{title}**", ephemeral=False)
+
+# ==== /queue COMMAND ====
+@bot.tree.command(name="jono", description="mitä jonossa")
+async def show_queue(interaction: discord.Interaction):
+    guild_id = interaction.guild.id
+    if guild_id not in queues or not queues[guild_id]:
+        await interaction.response.send_message("eioo mittään quessa", ephemeral=True)
+    else:
+        queue_list = "\n".join([f"{i+1}. {title}" for i, (_, title) in enumerate(queues[guild_id])])
+        await interaction.response.send_message(f"📜 **tällä hetkellä quessa:**\n{queue_list}", ephemeral=False)
+
+# ==== /skip COMMAND ====
+@bot.tree.command(name="skipp", description="jjjja seurraavaa kiitos")
+async def skip(interaction: discord.Interaction):
+    vc = interaction.guild.voice_client
+    if vc and vc.is_playing():
+        vc.stop()
+        await interaction.response.send_message("⏭️ skipattiin tuo äsköne, iha surkee video muutenki", ephemeral=False)
+    else:
+        await interaction.response.send_message("❌ mittään ei soi atm", ephemeral=True)
+
+# ==== /stop COMMAND ====
+@bot.tree.command(name="lopeta", description="lopeta musisointi heti")
+async def stop(interaction: discord.Interaction):
+    vc = interaction.guild.voice_client
+    guild_id = interaction.guild.id
+    if vc:
+        filters[guild_id] = []
+        queues[interaction.guild.id] = []
+        vc.stop()
+        await vc.disconnect()
+        await interaction.response.send_message("⏹️ oke meen pois sitte kerta", ephemeral=False)
+    else:
+        await interaction.response.send_message("❌ hei emmää ees soita mittään", ephemeral=True)
+
+
+#filtterit
+
+@bot.tree.command(name="filterbass", description="muumit massive bass")
+@app_commands.describe(gain="monellako desibelillä buustataan, max 50, min -50")
+async def bass(interaction: discord.Interaction, gain: int = 10):
+    guild_id = interaction.guild.id
+    vc = interaction.guild.voice_client
+
+    if not vc or not vc.is_playing():
+        await interaction.response.send_message("❌ mittään ei soi", ephemeral=True)
+        return
+
+    if gain > 50: gain = 50
+    if gain < -50: gain = -50
+
+    if guild_id not in filters:
+        filters[guild_id] = []
+
+    filters[guild_id] = [f for f in filters[guild_id] if not f.startswith("equalizer=")]
+    filters[guild_id].append(f"equalizer=f=40:width_type=h:width=50:g={gain}")
+
+    if gain > 0:
+        if gain == 50:
+            await interaction.response.send_message(f"AMISMUUMIT AKTIVOITU!!1!!!")
+        else:
+            await interaction.response.send_message(f"muumit massive bass aktivoitu ({gain}dB)", ephemeral=False)
+
+    elif gain < 0:
+        await interaction.response.send_message(f"muumit trivial bass aktivoitu ({gain}dB)")
+
+    elif gain == 0:
+        await interaction.response.send_message(f"normi muumit aktivoitu (0dB)")
+
+    else:
+        await interaction.response.send_message(f"mysteeri muumit aktivoitu, joku logiikka meni pieleen ({gain}dB)")
+
+    elapsed = int(time.time() - start_times.get(guild_id, 0))
+    await restart_with_filter(interaction, elapsed)
+
+
+@bot.tree.command(name="filteranime", description="anime moodi")
+async def anime(interaction: discord.Interaction):
+    guild_id = interaction.guild.id
+    vc = interaction.guild.voice_client
+
+    if not vc or not vc.is_playing():
+        await interaction.response.send_message("❌ mittään ei soi", ephemeral=True)
+        return
+
+    if guild_id not in filters:
+        filters[guild_id] = []
+
+    nightcore_filter = "asetrate=44100*1.25,aresample=44100,atempo=1.25"
+
+    if nightcore_filter in filters[guild_id]:
+        # Remove Nightcore
+        filters[guild_id].remove(nightcore_filter)
+        await interaction.response.send_message("anime moodi poistettu", ephemeral=False)
+    else:
+        # Remove conflicting pitch/tempo filters first
+        filters[guild_id] = [
+            f for f in filters[guild_id]
+            if not f.startswith("asetrate=") and not f.startswith("atempo=")
+        ]
+        # Add Nightcore
+        filters[guild_id].append(nightcore_filter)
+        await interaction.response.send_message("mega anime moodi päällä", ephemeral=False)
+
+    elapsed = int(time.time() - start_times.get(guild_id, 0))
+    await restart_with_filter(interaction, elapsed)
+        
+
+
+@bot.tree.command(name="filtertempo", description="tempo muutos komento")
+@app_commands.describe(tempo="montaks prosenttii muutetaan, max 100, min -50")
+async def tempo(interaction: discord.Interaction, tempo: int = 0):
+    guild_id = interaction.guild.id
+    vc = interaction.guild.voice_client
+
+    if not vc or not vc.is_playing():
+        await interaction.response.send_message("❌ mittään ei soi", ephemeral=True)
+        return
+
+    if tempo > 100: tempo = 100
+    elif tempo < -50: tempo = -50
+    tempo2 = float(tempo / 100) + 1
+    
+    if guild_id not in filters:
+        filters[guild_id] = []
+    # remove any existing tempo filter
+    filters[guild_id] = [f for f in filters[guild_id] if not f.startswith("atempo=")]
+    filters[guild_id].append(f"atempo={tempo2}")
+
+    if tempo > 0:
+        await interaction.response.send_message(f"nopeutettu playbäkkii {tempo} prosentilla")
+    
+    elif tempo < 0:
+        await interaction.response.send_message(f"hidastettu biisii {tempo} prosentilla")
+
+    elif tempo == 0:
+        await interaction.response.send_message(f"normi tempo saavutettu")
+
+    else:
+        await interaction.response.send_message(f"mysteeri tempo aktivoitu, {tempo} prosentin muutos")
+
+    elapsed = int(time.time() - start_times.get(guild_id, 0))
+    await restart_with_filter(interaction, elapsed)
+
+@bot.tree.command(name="filterpitch", description="tekkee semmosen gigachad tai anime version biisistä")
+@app_commands.describe(amount="kui palijo (1.0 = normi, 1.5 = anime, 0.8 = gigachad)")
+async def pitch(interaction: discord.Interaction, amount: float = 1.0):
+    if amount < 0.5: amount = 0.5
+    elif amount > 2: amount = 2
+
+    guild_id = interaction.guild.id
+    vc = interaction.guild.voice_client
+    if not vc or not vc.is_playing() or guild_id not in current_track:
+        await interaction.response.send_message("❌ mittään ei soi", ephemeral=True)
+        return
+
+    if guild_id not in filters:
+        filters[guild_id] = []
+
+    # remove any existing pitch filter
+    filters[guild_id] = [f for f in filters[guild_id] if not f.startswith("asetrate=")]
+
+    # add pitch filter
+    filters[guild_id].append(f"asetrate=44100*{amount},aresample=44100")
+
+    if amount < 1:
+        await interaction.response.send_message(f"gigachad moodi aktivoitu (muutos: {amount})")
+    elif amount > 1:
+        await interaction.response.send_message(f"animetyllerö versio aktivoitu (muutos: {amount})")
+    else:
+        await interaction.response.send_message(f"normi versio (muutos: {amount})")
+
+    elapsed = int(time.time() - start_times.get(guild_id, 0))
+    await restart_with_filter(interaction, elapsed)
+
+
+@bot.tree.command(name="filterpois", description="ottaa kaikki audiofiltterit pois")
+async def clearfilter(interaction: discord.Interaction):
+    guild_id = interaction.guild.id
+    vc = interaction.guild.voice_client
+    if not vc or not vc.is_playing() or guild_id not in current_track:
+        filters[guild_id] = []
+        await interaction.response.send_message("filtterit otettu poies", ephemeral=True)
+        return
+
+    filters[guild_id] = []
+    await interaction.response.send_message("kaikki filtterit otettu poies", ephemeral=False)
+    elapsed = int(time.time() - start_times.get(guild_id, 0))
+    await restart_with_filter(interaction, elapsed)
+
+
+
+bot.run(TOKEN)
