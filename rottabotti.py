@@ -129,7 +129,6 @@ async def play_track(ctx, url: str, title: str, duration: int, seek_seconds: int
         ),
         after=after_wrapper
         )
-    await songinfo(ctx, title, duration)
 
     current_track[guild_id] = (url, title, duration)
     start_times[guild_id] = time.time() - seek_seconds
@@ -137,14 +136,24 @@ async def play_track(ctx, url: str, title: str, duration: int, seek_seconds: int
 
 async def play_next(ctx, seek_seconds: int = 0):
     guild_id = ctx.guild.id
-    # jos queuessa tavaraa
-    if queues.get(guild_id):
-        url, title, duration = queues[guild_id].pop(0)
+    
+    # jos looping päällä
+    if looping.get(guild_id):
+        #print(f"looping päällä, looplista: {looping[guild_id]}") #debug
+        url, title, duration = looping[guild_id].pop(0)
+        looping[guild_id].append((url, title, duration))
         await play_track(ctx, url, title, duration)
-    # jos queue tyhjä
+    
     else:
-        current_track.pop(guild_id, None)
-        start_times.pop(guild_id, None)
+        # jos queuessa tavaraa
+        if queues.get(guild_id):
+            url, title, duration = queues[guild_id].pop(0)
+            await songinfo(ctx, title, duration)
+            await play_track(ctx, url, title, duration)
+        # jos queue tyhjä
+        else:
+            current_track.pop(guild_id, None)
+            start_times.pop(guild_id, None)
 
 
 # biisin nimi ja kesto tulostus
@@ -186,6 +195,7 @@ async def check_voice_channel_empty(ctx, vc):
                 filters[guild_id] = []
                 queues[guild_id] = []
                 current_track[guild_id] = ()
+                looping[guild_id] = []
                 start_times[guild_id] = []
                 await vc.disconnect()
                 return
@@ -312,6 +322,7 @@ async def play(interaction: discord.Interaction, query: str):
         if not vc.is_playing():
             bot.loop.create_task(check_voice_channel_empty(interaction, vc))
             #bot.loop.create_task(checkqueue_vc(interaction, vc))
+            await songinfo(interaction, title, duration)
             await play_track(interaction, url, title, duration)
         else:
             queues[guild_id].append((url, title, duration))
@@ -331,7 +342,7 @@ async def show_queue(interaction: discord.Interaction):
     queue_list = ""
     for entry in queues[guild_id]:
         queue_list += f"\n{entry[1]}"
-    await interaction.response.send_message("done")
+    await interaction.response.send_message("done", ephemeral=True)
     await sendtochannel(interaction, f"Nyt soi: **{current_track[guild_id][1]}**\n\nSeuraavaksi jonossa:**{queue_list}**")
 
 
@@ -346,29 +357,43 @@ async def skip(interaction: discord.Interaction):
     else:
         await interaction.response.send_message("ei skipattavaa", ephemeral=True)
 
-"""
+
 # /loop komento
 @bot.tree.command(name="loop", description="loop moodi toggler")
 @app_commands.describe(mode="pois(x), biisi(b) tai jono(q)")
-async def loop(interaction: discord.Interaction, mode=str):
+async def loop(interaction: discord.Interaction, mode: str):
     guild_id = interaction.guild.id
     vc = interaction.guild.voice_client
-    if not vc:
-        await interaction.response.send_message("en oo kanavalla")
+    if not vc or not vc.is_playing():
+        await interaction.response.send_message("en oo kanavalla tai mitään ei soi")
         return
 
-    if mode[0].lower() not in "pxbjq":
+    if mode[0].lower() not in "pxbjq123":
         await interaction.response.send_message("incompat moodi")
         return
 
     moodi = mode[0].lower()
 
-    if moodi in "px":
-        looping[guild_id]
-"""
+    if moodi in "px1":
+        looping[guild_id] = []
+        temp = "looppaus pois päältä"
+    elif moodi in "jq3":
+        looping[guild_id] = []
+        for biisi in queues[guild_id]:
+            looping[guild_id].append((biisi))
+        looping[guild_id].append((current_track[guild_id]))
+        temp = "jonon looppaus päällä"
+    else:
+        looping[guild_id] = []
+        looping[guild_id].append((current_track[guild_id]))
+        temp = "biisin looppaus päällä"
+
+    await interaction.response.send_message("done", ephemeral=True)
+    await sendtochannel(interaction, temp)
 
 
-# /lopeta komento
+
+# /lopeta komennot, näitä on huvikseen monta
 @bot.tree.command(name="lopeta", description="heihei botti")
 async def stop(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
@@ -378,6 +403,39 @@ async def stop(interaction: discord.Interaction):
         queues[guild_id] = []
         current_track[guild_id] = []
         start_times[guild_id] = []
+        looping[guild_id] = []
+        vc.stop()
+        await vc.disconnect()
+        await interaction.response.send_message("poistuttu kanavalta", ephemeral=False)
+    else:
+        await interaction.response.send_message("eioo mitään mistä poistua", ephemeral=True)
+
+@bot.tree.command(name="poistu", description="heihei botti")
+async def stop(interaction: discord.Interaction):
+    vc = interaction.guild.voice_client
+    guild_id = interaction.guild.id
+    if vc:
+        filters[guild_id] = []
+        queues[guild_id] = []
+        current_track[guild_id] = []
+        start_times[guild_id] = []
+        looping[guild_id] = []
+        vc.stop()
+        await vc.disconnect()
+        await interaction.response.send_message("poistuttu kanavalta", ephemeral=False)
+    else:
+        await interaction.response.send_message("eioo mitään mistä poistua", ephemeral=True)
+
+@bot.tree.command(name="bye", description="heihei botti")
+async def stop(interaction: discord.Interaction):
+    vc = interaction.guild.voice_client
+    guild_id = interaction.guild.id
+    if vc:
+        filters[guild_id] = []
+        queues[guild_id] = []
+        current_track[guild_id] = []
+        start_times[guild_id] = []
+        looping[guild_id] = []
         vc.stop()
         await vc.disconnect()
         await interaction.response.send_message("poistuttu kanavalta", ephemeral=False)
@@ -658,7 +716,7 @@ async def sendtochannel(ctx, message: str):
     if channel:
         await channel.send(message)
     else:
-        await ctx.send("epäonnistuttu viestin lähettämisessä")
+        await print("epäonnistuttu viestin lähettämisessä")
 
 @bot.tree.command(name="configchannel", description="konfiguroi kanava johon viestit laitetaan")
 @app_commands.describe(channel="valitte kanava")
@@ -673,12 +731,13 @@ async def setchannel(interaction: discord.Interaction, channel: discord.TextChan
 
 
 CHANNEL_FILE = "/root/channelconfig.json"
+TOKEN_FILE = "/opt/rottabotti/.env"
 
 channels = load_channels() # {guild_id: channel_id}, ladataan apufunktion kautta
 
 
 # botti päälle
-with open("/opt/rottabotti/.env", "r") as tokenfile:
+with open(TOKEN_FILE, "r") as tokenfile:
     TOKEN=tokenfile.read().strip()
 
 bot.run(TOKEN)
