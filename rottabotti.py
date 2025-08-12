@@ -174,7 +174,7 @@ async def songinfo(ctx, title, duration, now: bool = True):
         lenstring += f"{seconds} sec"
     lenstring += "**"
     #print(f"tulostetaan: {whenplays}: **{title}**\n{lenstring}") #debug
-    await sendtochannel(ctx, f"{whenplays}: **{title}**\n{lenstring}")
+    await sendtochannel(ctx, f"{whenplays}**{title}**\n{lenstring}")
 
 
 # --------------- #
@@ -767,6 +767,9 @@ def save_channels(data):
         json.dump(data, f, indent=4)
 
 
+
+
+# tärkee apufunktio, tän kautta laitetaan kaikki viestit kanavalle
 async def sendtochannel(ctx, message: str):
     guild_id = str(ctx.guild_id)
     if guild_id not in channels:
