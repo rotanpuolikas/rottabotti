@@ -12,6 +12,7 @@ import os
 
 intents = discord.Intents.default()
 intents.members = True
+intents.guilds = True
 
 bot = commands.Bot(command_prefix="!", intents=intents)
 
@@ -37,8 +38,7 @@ current_track = {} # {guild_id: (url, title, duration)}
 start_times = {} # {guild_id: unix timestamp}
 looping = {} # {guild_id: [(url, title, duration), (url, title, duration)]}
 suppress_after = {} # {guild_id: bool}
-channels = load_channels() # {guild_id: channel_id}, ladataan apufunktion kautta
-
+channels = {} # {guild_id: channel_id}, ladataan myöhemmin apufunktiossa
 
 MAX_QUERY_LENGTH = 100
 
@@ -129,7 +129,7 @@ async def play_track(ctx, url: str, title: str, duration: int, seek_seconds: int
         ),
         after=after_wrapper
         )
-
+    await songinfo(ctx, title, duration)
 
     current_track[guild_id] = (url, title, duration)
     start_times[guild_id] = time.time() - seek_seconds
@@ -147,6 +147,29 @@ async def play_next(ctx, seek_seconds: int = 0):
         start_times.pop(guild_id, None)
 
 
+# biisin nimi ja kesto tulostus
+async def songinfo(ctx, title, duration, now: bool = True):
+    if now: whenplays = "Nyt soi: "
+    else: whenplays = "Lisätty jonoon: "
+    seconds = duration
+    hours = duration // 3600
+    minutes = (duration % 3600) // 60
+    seconds = duration % 60
+    lenstring = "Biisin kesto: **"
+    if hours > 0:
+        lenstring += f"{hours} h "
+    if minutes > 0:
+        lenstring += f"{minutes} min "
+    if seconds > 0:
+        lenstring += f"{seconds} sec"
+    lenstring += "**"
+    #print(f"tulostetaan: {whenplays}: **{title}**\n{lenstring}") #debug
+    await sendtochannel(ctx, f"{whenplays}: **{title}**\n{lenstring}")
+
+
+# --------------- #
+# taustaprosessit #
+# --------------- #
 
 # botin automaattinen kanavalta poistuminen
 async def check_voice_channel_empty(ctx, vc):
@@ -290,23 +313,10 @@ async def play(interaction: discord.Interaction, query: str):
             bot.loop.create_task(check_voice_channel_empty(interaction, vc))
             #bot.loop.create_task(checkqueue_vc(interaction, vc))
             await play_track(interaction, url, title, duration)
-            await interaction.followup.send(f"nyt soi: **{title}**", ephemeral=False)
         else:
             queues[guild_id].append((url, title, duration))
-            await interaction.followup.send(f"lisättiin jonoon: **{title}**")
-        seconds = duration
-        hours = duration // 3600
-        minutes = (duration % 3600) // 60
-        seconds = duration % 60
-        lenstring = "Biisin kesto: **"
-        if hours > 0:
-            lenstring += f"{hours} h "
-        if minutes > 0:
-            lenstring += f"{minutes} min "
-        if seconds > 0:
-            lenstring += f"{seconds} sec"
-        lenstring += "**"
-        await interaction.followup.send(f"{lenstring}")
+            await songinfo(interaction, title, duration, False)
+        
     except:
         return
 
@@ -318,8 +328,11 @@ async def show_queue(interaction: discord.Interaction):
     if guild_id not in queues or not queues[guild_id]:
         await interaction.response.send_message("jono näyttää tyhjältä", ephemeral=True)
         return
-    queue_list = "\n".join({f"{i+1}. {title}" for i, (_, title) in enumerate(queues[guild_id])})
-    await interaction.response.send_message(f"**Nyt soi:**\n{current_track[guild_id][1]}\n\n**tällä hetkellä jonossa:**\n{queue_list}", ephemeral=False)
+    queue_list = ""
+    for entry in queues[guild_id]:
+        queue_list += f"\n{entry[1]}"
+    await interaction.response.send_message("done")
+    await sendtochannel(interaction, f"Nyt soi: **{current_track[guild_id][1]}**\n\nSeuraavaksi jonossa:**{queue_list}**")
 
 
 # /skipp komento
@@ -618,19 +631,25 @@ async def filterpois(interaction: discord.Interaction):
 
 # config utility funktiot
 def load_channels():
-    if os.path.exists(CHANNEL_FILE):
+    try:
         with open(CHANNEL_FILE, "r") as f:
-            return json.load(f)
-    return {} # tyhjä kirjasto jos ei oo olemassa
+            data = json.load(f)
+        save_channels(dict(data))
+        print(f"kanavat ladattu, dict: {dict(data)}")
+        return dict(data)
+    except Exception as e:
+        print(f"virhe kanavien latauksessa: {e}")
+        return {} # tyhjä kirjasto jos ei oo olemassa
 
 def save_channels(data):
     with open(CHANNEL_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
+
 async def sendtochannel(ctx, message: str):
-    guild_id = ctx.guild_id
+    guild_id = str(ctx.guild_id)
     if guild_id not in channels:
-        await ctx.send("default kanavaa eioo määritetty")
+        print("default kanavaa eioo määritetty")
         return
     
     channel_id = channels[guild_id]
@@ -653,11 +672,9 @@ async def setchannel(interaction: discord.Interaction, channel: discord.TextChan
 
 
 
-CHANNEL_FILE = "./channelconfig.json"
+CHANNEL_FILE = "/root/channelconfig.json"
 
-# ladataan kanavat joihin viesti laitetaan
-with open("./channelconfig.json", "r") as f:
-    config = json.load(f)
+channels = load_channels() # {guild_id: channel_id}, ladataan apufunktion kautta
 
 
 # botti päälle
