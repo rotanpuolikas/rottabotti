@@ -21,6 +21,10 @@ tällä hetkellä rottabotti pystyy vaihtaan käyttäjien nimiä ja toimiin peru
 
 **/loop** antaa mahdollisuuden joko 1. poistaa loop, 2. loopata yhtä biisiä tai 3. loopata koko jonoa
 
+**/shuffle** sekoittaa jonon
+
+**/leagueofhappiness** soittaa livin da vida loca:n
+
 ### Filtterit
   
 Kaikkia näitä edeltää **/filter**, eli koko syntaksi olisi **/filterbass**

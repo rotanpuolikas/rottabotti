@@ -471,13 +471,40 @@ async def shuffle(interaction: discord.Interaction):
 
 @bot.tree.command(name="leagueofhappiness", description="maldataan yhdessä")
 async def league(interaction: discord.Interaction, are_you_sure: str):
+    guild_id = interaction.guild_id
     if are_you_sure.lower() != "yes":
-        interaction.response.send_message("et ollu varma", ephemeral=True)
+        await interaction.response.send_message("et ollu varma", ephemeral=True)
         return
 
-    else:
-        interaction.response.send_message("livin da vida loca baby")
+    try:
+        if not interaction.user.voice or not interaction.user.voice.channel:
+            await interaction.response.send_message("et oo voicessa", ephemeral=True)
+            return
 
+        channel = interaction.user.voice.channel
+
+        if not interaction.guild.voice_client:
+            try:
+                await channel.connect()
+            except Exception as e:
+                await interaction.response.send_message("liittyminen epäonnistui, exception: {e}", ephemeral=False)
+                return
+    except:
+        await interaction.response.send_message("joku muu meni vituilleen", ephemeral=True)
+
+    await interaction.response.send_message("livin da vida loca baby")
+    url, title, duration = ytdlp_find(interaction, "livin da vida loca")
+
+    vc = interaction.guild.voice_client
+    if not vc.is_playing():
+        bot.loop.create_task(check_voice_channel_empty(interaction, vc))
+        await play_track(interaction, url, title, duration)
+    else:
+        url2, title2, duration2 = current_track[guild_id]
+        queues[guild_id].insert(0, (url, title, duration))
+        queues[guild_id].insert(1, (url2, title2, duration2))
+        vc.stop()
+ 
 
 # --------- #
 # filtterit #
