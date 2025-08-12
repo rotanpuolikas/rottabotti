@@ -4,6 +4,8 @@ from discord.ext import commands
 import yt_dlp
 import asyncio
 import time
+import json
+import os
 
 
 #botin asetukset
@@ -35,6 +37,7 @@ current_track = {} # {guild_id: (url, title, duration)}
 start_times = {} # {guild_id: unix timestamp}
 looping = {} # {guild_id: [(url, title, duration), (url, title, duration)]}
 suppress_after = {} # {guild_id: bool}
+channels = load_channels() # {guild_id: channel_id}, ladataan apufunktion kautta
 
 
 MAX_QUERY_LENGTH = 100
@@ -73,10 +76,12 @@ def ytdlp_find(ctx, query: str = "gangnam style"):
     
     # custom teksti promptit pelottaa
     safequery = sanitize(query)
-    if safequery == "": return None, None, None
+    if safequery == "":
+        info = ytdl.extract_info(f"ytsearch: pelle hermanni theme", download=False)["entries"][0]
 
     # biisin tiedot, valitaan ensimmäinen joka löytyy
-    info = ytdl.extract_info(f"ytsearch: {query}", download=False)["entries"][0]
+    else:
+        info = ytdl.extract_info(f"ytsearch: {query}", download=False)["entries"][0]
     url = info["url"]
     title = info["title"]
     duration = info["duration"]
@@ -94,6 +99,7 @@ async def play_track(ctx, url: str, title: str, duration: int, seek_seconds: int
     # jos tarvii seekkaa nii tehrää niin
     if seek_seconds > 0:
         seek_opt = f"{ffmpeg_base_before} -ss {seek_seconds}"
+        bot.loop.create_task(tracksong(ctx, vc))
     else:
         seek_opt = f"{ffmpeg_base_before}"
 
@@ -239,7 +245,7 @@ async def name_command(interaction: discord.Interaction, target: discord.Member,
 # /liity komento:
 @bot.tree.command(name="liity", description="liity kanavalle")
 async def join(interaction: discord.Interaction):
-    if not interaction.user.voice or not interaction.user.voice_channel:
+    if not interaction.user.voice or not interaction.user.voice.channel:
         await interaction.response.send_message("sun pitää olla voicessa että tää toimii", ephemeral=True)
         return
 
@@ -288,6 +294,19 @@ async def play(interaction: discord.Interaction, query: str):
         else:
             queues[guild_id].append((url, title, duration))
             await interaction.followup.send(f"lisättiin jonoon: **{title}**")
+        seconds = duration
+        hours = duration // 3600
+        minutes = (duration % 3600) // 60
+        seconds = duration % 60
+        lenstring = "Biisin kesto: **"
+        if hours > 0:
+            lenstring += f"{hours} h "
+        if minutes > 0:
+            lenstring += f"{minutes} min "
+        if seconds > 0:
+            lenstring += f"{seconds} sec"
+        lenstring += "**"
+        await interaction.followup.send(f"{lenstring}")
     except:
         return
 
@@ -374,7 +393,6 @@ async def customrunko(interaction: discord.Interaction, value: int = 0):
     filters[guild_id].append(f"filtteriteksti")
 
     if vc.is_playing():
-        bot.loop.create_task(tracksong(interaction, vc))
         url, title, duration = current_track[guild_id]
         elapsed = int(time.time() - start_times.get(guild_id, 0))
         await play_track(interaction, url, title, duration, elapsed, False)
@@ -405,7 +423,6 @@ async def togglerunko(interaction: discord.Interaction):
         await interaction.response.send_message("filtteri päällä", ephemeral=False)
 
     if vc.is_playing():
-        bot.loop.create_task(tracksong(interaction, vc))
         url, title, duration = current_track[guild_id]
         elapsed = int(time.time() - start_times.get(guild_id, 0))
         # soitetaan ja annetaan parametreinä interactio, biisin tiedot, kauanko menny ja tärkeä AUTOPLAY: False
@@ -443,7 +460,6 @@ async def custombass(interaction: discord.Interaction, gain: int = 10):
         await interaction.response.send_message(f"bassboost disabloitu")
 
     if vc.is_playing():
-        bot.loop.create_task(tracksong(interaction, vc))
         url, title, duration = current_track[guild_id]
         elapsed = int(time.time() - start_times.get(guild_id, 0))
         await play_track(interaction, url, title, duration, elapsed, False)
@@ -475,7 +491,6 @@ async def bassfilter(interaction: discord.Interaction):
         await interaction.response.send_message("bass boost päällä", ephemeral=False)
 
     if vc.is_playing():
-        bot.loop.create_task(tracksong(interaction, vc))
         url, title, duration = current_track[guild_id]
         elapsed = int(time.time() - start_times.get(guild_id, 0))
         await play_track(interaction, url, title, duration, elapsed, False)
@@ -507,7 +522,6 @@ async def amisfilter(interaction: discord.Interaction):
         await interaction.response.send_message("amis moodi päällä", ephemeral=False)
 
     if vc.is_playing():
-        bot.loop.create_task(tracksong(interaction, vc))
         url, title, duration = current_track[guild_id]
         elapsed = int(time.time() - start_times.get(guild_id, 0))
         await play_track(interaction, url, title, duration, elapsed, autoplay=False)
@@ -539,7 +553,6 @@ async def animefilter(interaction: discord.Interaction):
         await interaction.response.send_message("nightcore moodi päällä", ephemeral=False)
 
     if vc.is_playing():
-        bot.loop.create_task(tracksong(interaction, vc))
         url, title, duration = current_track[guild_id]
         elapsed = int(time.time() - start_times.get(guild_id, 0))
         await play_track(interaction, url, title, duration, elapsed, False)
@@ -570,7 +583,6 @@ async def sigmafilter(interaction: discord.Interaction):
         await interaction.response.send_message("sigma moodi päällä", ephemeral=False)
 
     if vc.is_playing():
-        bot.loop.create_task(tracksong(interaction, vc))
         url, title, duration = current_track[guild_id]
         elapsed = int(time.time() - start_times.get(guild_id, 0))
         await play_track(interaction, url, title, duration, elapsed, False)
@@ -591,11 +603,61 @@ async def filterpois(interaction: discord.Interaction):
 
 
     if vc.is_playing():
-        bot.loop.create_task(tracksong(interaction, vc))
         url, title, duration = current_track[guild_id]
         elapsed = int(time.time() - start_times.get(guild_id, 0))
         await play_track(interaction, url, title, duration, elapsed, False)
 
+
+
+
+# --------------- #
+# muita komentoja #
+# --------------- #
+
+
+
+# config utility funktiot
+def load_channels():
+    if os.path.exists(CHANNEL_FILE):
+        with open(CHANNEL_FILE, "r") as f:
+            return json.load(f)
+    return {} # tyhjä kirjasto jos ei oo olemassa
+
+def save_channels(data):
+    with open(CHANNEL_FILE, "w") as f:
+        json.dump(data, f, indent=4)
+
+async def sendtochannel(ctx, message: str):
+    guild_id = ctx.guild_id
+    if guild_id not in channels:
+        await ctx.send("default kanavaa eioo määritetty")
+        return
+    
+    channel_id = channels[guild_id]
+    channel = bot.get_channel(channel_id)
+
+    if channel:
+        await channel.send(message)
+    else:
+        await ctx.send("epäonnistuttu viestin lähettämisessä")
+
+@bot.tree.command(name="configchannel", description="konfiguroi kanava johon viestit laitetaan")
+@app_commands.describe(channel="valitte kanava")
+@commands.has_permissions(administrator=True)
+async def setchannel(interaction: discord.Interaction, channel: discord.TextChannel):
+    guild_id = interaction.guild_id
+    channels[guild_id] = channel.id
+    save_channels(channels)
+    await interaction.response.send_message(f"Kanavaksi vaihdettu {channel.mention}")
+
+
+
+
+CHANNEL_FILE = "./channelconfig.json"
+
+# ladataan kanavat joihin viesti laitetaan
+with open("./channelconfig.json", "r") as f:
+    config = json.load(f)
 
 
 # botti päälle
