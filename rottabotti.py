@@ -6,7 +6,7 @@ import asyncio
 import time
 import json
 import os
-
+import random
 
 #botin asetukset
 
@@ -39,6 +39,7 @@ start_times = {} # {guild_id: unix timestamp}
 looping = {} # {guild_id: [(url, title, duration), (url, title, duration)]}
 suppress_after = {} # {guild_id: bool}
 channels = {} # {guild_id: channel_id}, ladataan myöhemmin apufunktiossa
+paused = {} # {guild_id: stop_time} pidetään trackkia siitä onko biisi pausella
 
 MAX_QUERY_LENGTH = 100
 
@@ -340,8 +341,12 @@ async def show_queue(interaction: discord.Interaction):
         await interaction.response.send_message("jono näyttää tyhjältä", ephemeral=True)
         return
     queue_list = ""
-    for entry in queues[guild_id]:
-        queue_list += f"\n{entry[1]}"
+    if looping.get(guild_id):
+        for entry in looping[guild_id]:
+            queue_list += f"\n{entry[1]}"
+    else:
+        for entry in queues[guild_id]:
+            queue_list += f"\n{entry[1]}"
     await interaction.response.send_message("done", ephemeral=True)
     await sendtochannel(interaction, f"Nyt soi: **{current_track[guild_id][1]}**\n\nSeuraavaksi jonossa:**{queue_list}**")
 
@@ -441,6 +446,37 @@ async def stop(interaction: discord.Interaction):
         await interaction.response.send_message("poistuttu kanavalta", ephemeral=False)
     else:
         await interaction.response.send_message("eioo mitään mistä poistua", ephemeral=True)
+
+
+
+# /shuffle komento jonolle
+@bot.tree.command(name="shuffle", description="shufflaa jono")
+async def shuffle(interaction: discord.Interaction):
+    guild_id = interaction.guild_id
+    if looping.get(guild_id):
+        if len(looping[guild_id]) > 1:
+            random.shuffle(looping[guild_id])
+            await interaction.response.send_message("loop shufflattu")
+        else:
+            await interaction.response.send_message("emmää voi yhtä biisiä shufflata")
+    else:
+        if len(queues[guild_id]) > 1:
+            random.shuffle(queues[guild_id])
+            await interaction.response.send_message("jono shufflattu")
+        elif len(queues[guild_id]) == 1:
+            await interaction.response.send_message("emmää voi shufflaa yhtä biisiä")
+        else:
+            await interaction.response.send_message("ei täällä soi mitään")
+
+
+@bot.tree.command(name="leagueofhappiness", description="maldataan yhdessä")
+async def league(interaction: discord.Interaction, are_you_sure: str):
+    if are_you_sure.lower() != "yes":
+        interaction.response.send_message("et ollu varma", ephemeral=True)
+        return
+
+    else:
+        interaction.response.send_message("livin da vida loca baby")
 
 
 # --------- #
