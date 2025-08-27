@@ -177,6 +177,29 @@ async def songinfo(ctx, title, duration, now: bool = True):
     await sendtochannel(ctx, f"{whenplays}**{title}**\n{lenstring}")
 
 
+# voiceen connectaus funktio
+async def connectVoice(ctx, playsound: bool = False):
+    if not ctx.user.voice or not ctx.user.voice.channel:
+        await ctx.response.send_message("sun pitää olla voicessa että tää toimii", ephemeral=True)
+        return
+
+    channel = ctx.user.voice.channel
+
+    if not ctx.guild.voice_client:
+        try:
+            await channel.connect()
+            if playsound:
+                vc = ctx.guild.voice_client
+                vc.play(discord.FFmpegPCMAudio("./joinsound.mp3"))
+            return True
+        except Exception as e:
+            await ctx.response.send_message("liittyminen epäonnistui, exception: {e}")
+            return False
+    else:
+        await ctx.response.send_message("failed", ephemeral=True)
+        return False
+
+
 # --------------- #
 # taustaprosessit #
 # --------------- #
@@ -279,17 +302,8 @@ async def name_command(interaction: discord.Interaction, target: discord.Member,
 # /liity komento:
 @bot.tree.command(name="liity", description="liity kanavalle")
 async def join(interaction: discord.Interaction):
-    if not interaction.user.voice or not interaction.user.voice.channel:
-        await interaction.response.send_message("sun pitää olla voicessa että tää toimii", ephemeral=True)
-        return
-
-    channel = interaction.user.voice.channel
-    if not interaction.guild.voice_client:
-        try:
-            await channel.connect()
-            await interaction.response.send_message("liitytty kanavalle", ephemeral=True)
-        except Exception as e:
-            await interaction.response.send_message("liittyminen epäonnistui, exception: {e}", ephemeral=False)
+    if not await connectVoice(interaction, True): return
+    await interaction.response.send_message("liitytty kanavalle")
 
 
 # /soita komento
@@ -297,18 +311,7 @@ async def join(interaction: discord.Interaction):
 @app_commands.describe(query="biisin nimi tai youtube url")
 async def play(interaction: discord.Interaction, query: str):
     try:
-        if not interaction.user.voice or not interaction.user.voice.channel:
-            await interaction.response.send_message("et oo voicessa", ephemeral=True)
-            return
-
-        channel = interaction.user.voice.channel
-
-        if not interaction.guild.voice_client:
-            try:
-                await channel.connect()
-            except Exception as e:
-                await interaction.response.send_message("liittyminen epäonnistui, exception: {e}", ephemeral=False)
-                return
+        if not await connectVoice(interaction, True): return
 
         await interaction.response.send_message(f"etitään youtubesta **{query}**", ephemeral=True)
         url, title, duration = ytdlp_find(interaction, query)
@@ -740,6 +743,41 @@ async def filterpois(interaction: discord.Interaction):
         url, title, duration = current_track[guild_id]
         elapsed = int(time.time() - start_times.get(guild_id, 0))
         await play_track(interaction, url, title, duration, elapsed, False)
+
+
+
+# -------- #
+# Trollaus #
+# -------- #
+
+@bot.tree.command(name="gnome", description="gnome")
+@app_commands.describe(target="kuka")
+async def gnomeUser(interaction: discord.Interaction, target: discord.Member):
+    if not target.voice or not target.voice.channel:
+        await interaction.response.send_message("target ei oo voicessa", ephemeral=True)
+        return
+
+    guild_id = interaction.guild_id
+    if current_track.get(guild_id):
+        await interaction.response.send_message("soitan jo toisella kanavalla")
+        return
+
+    channel = target.voice.channel
+
+    if not interaction.guild.voice_client:
+        try:
+            await channel.connect()
+            await interaction.response.send_message("gnoming", ephemeral=True)
+            vc = interaction.guild.voice_client
+            vc.play(discord.FFmpegPCMAudio("./gnomed.mp3"))
+            await asyncio.sleep(15.5)
+            await vc.disconnect()
+        except Exception as e:
+            await interaction.response.send_message("liittyminen epäonnistu, exception: {e}")
+            return
+    else:
+        await interaction.response.send_message("failed", ephemeral=True)
+
 
 
 

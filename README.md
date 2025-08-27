@@ -25,7 +25,7 @@ tällä hetkellä rottabotti pystyy vaihtaan käyttäjien nimiä ja toimiin peru
 
 **/leagueofhappiness** soittaa livin da vida loca:n
 
-### Filtterit
+### Filtterit:
   
 Kaikkia näitä edeltää **/filter**, eli koko syntaksi olisi **/filterbass**
 
@@ -40,3 +40,7 @@ Kaikkia näitä edeltää **/filter**, eli koko syntaksi olisi **/filterbass**
 **sigma** asettaa raten *0.85 originaalista, tehden biiseistä gigachad sigma versioita
   
 **filterpois** et varmaan koskaan arvaa mitä tää tekkee
+
+### hassut funktiot:
+
+**/gnome** gnomettaa targetin
