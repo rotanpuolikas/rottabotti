@@ -322,7 +322,7 @@ async def silence_command(interaction: discord.Interaction):
     elif mayhem[interaction.guild.id] == False or mayhem[interaction.guild.id] == None:
         mayhem[interaction.guild.id] == True
     else:
-        mayhem[intereaction.guild.id] = False
+        mayhem[interaction.guild.id] = False
     await randomsound(interaction)
     await interaction.response.send_message(f"nyt on 'hiljaista' ;)", ephemeral=True)
 
