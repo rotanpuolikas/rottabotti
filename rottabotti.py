@@ -218,8 +218,8 @@ async def connectVoice(ctx, playsound: bool = False):
 
 
 async def randomsound(ctx):
-    MINIMUM = 5
-    MAXIMUM = 120
+    MINIMUM = 30
+    MAXIMUM = 240
 
     vc = ctx.guild.voice_client
     guild_id = ctx.guild.id
@@ -229,7 +229,7 @@ async def randomsound(ctx):
         print(f"{time.strftime('%H:%M:%S')} Next sound: {interval} seconds")
         await asyncio.sleep(interval)
         if ctx.guild.voice_client and not vc.is_playing():
-            vc.play(discord.FFmpegPCMAudio("/root/joinsound.mp3"))
+            vc.play(discord.FFmpegPCMAudio("/root/randomsound.mp3"))
 
 
 # botin automaattinen kanavalta poistuminen
