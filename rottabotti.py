@@ -203,7 +203,7 @@ async def connectVoice(ctx, playsound: bool = False):
             await channel.connect()
             if playsound:
                 vc = ctx.guild.voice_client
-                vc.play(discord.FFmpegPCMAudio("./joinsound.mp3"))
+                vc.play(discord.FFmpegPCMAudio("/root/audio/joinsound.mp3"))
             return True
         except Exception as e:
             await ctx.response.send_message("liittyminen epäonnistui, exception: {e}")
@@ -219,17 +219,26 @@ async def connectVoice(ctx, playsound: bool = False):
 
 async def randomsound(ctx):
     MINIMUM = 30
-    MAXIMUM = 240
+    MAXIMUM = 300
 
     vc = ctx.guild.voice_client
     guild_id = ctx.guild.id
 
+    audios = [
+        "/root/audio/teemo1.ogx",
+        "/root/audio/teemo2.ogx",
+        "/root/audio/teemo3.ogx",
+    ]
+
     while mayhem[guild_id]:
         interval = random.randint(MINIMUM, MAXIMUM)
-        print(f"{time.strftime('%H:%M:%S')} Next sound: {interval} seconds")
+        sound = random.choice(audios)
+        print(
+            f"{time.strftime('%H:%M:%S')} Next sound: {interval} seconds, next audio: {sound}"
+        )
         await asyncio.sleep(interval)
-        if ctx.guild.voice_client and not vc.is_playing():
-            vc.play(discord.FFmpegPCMAudio("/root/randomsound.mp3"))
+        if vc.is_connected() and not vc.is_playing():
+            vc.play(discord.FFmpegPCMAudio(sound))
 
 
 # botin automaattinen kanavalta poistuminen
@@ -319,12 +328,20 @@ async def silence_command(interaction: discord.Interaction):
         return
     if interaction.guild.id not in mayhem:
         mayhem[interaction.guild.id] = True
-    elif mayhem[interaction.guild.id] == False or mayhem[interaction.guild.id] == None:
-        mayhem[interaction.guild.id] == True
+        await interaction.response.send_message(
+            f"nyt on 'hiljaista' ;)", ephemeral=True
+        )
+    elif mayhem[interaction.guild.id] == False:
+        await interaction.response.send_message(
+            f"nyt on 'hiljaista' ;)", ephemeral=True
+        )
+        mayhem[interaction.guild.id] = True
     else:
+        await interaction.response.send_message(
+            f"'hiljaisuus' ohi, palataan hiljaisuuteen", ephemeral=True
+        )
         mayhem[interaction.guild.id] = False
     await randomsound(interaction)
-    await interaction.response.send_message(f"nyt on 'hiljaista' ;)", ephemeral=True)
 
 
 # /nimi komento:
