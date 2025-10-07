@@ -203,10 +203,10 @@ async def connectVoice(ctx, playsound: bool = False):
             await channel.connect()
             if playsound:
                 vc = ctx.guild.voice_client
-                vc.play(discord.FFmpegPCMAudio("/root/audio/joinsound.mp3"))
+                vc.play(discord.FFmpegPCMAudio("/home/rottabotti/audio/joinsound.mp3"))
             return True
         except Exception as e:
-            await ctx.response.send_message("liittyminen epäonnistui, exception: {e}")
+            await ctx.response.send_message(f"liittyminen epäonnistui, exception: {e}")
             return False
     else:
         return True
@@ -225,9 +225,9 @@ async def randomsound(ctx):
     guild_id = ctx.guild.id
 
     audios = [
-        "/root/audio/teemo1.ogx",
-        "/root/audio/teemo2.ogx",
-        "/root/audio/teemo3.ogx",
+        "/home/rottabotti/audio/teemo1.ogx",
+        "/home/rottabotti/audio/teemo2.ogx",
+        "/home/rottabotti/audio/teemo3.ogx",
     ]
 
     while mayhem[guild_id]:
@@ -854,9 +854,9 @@ async def filterpois(interaction: discord.Interaction):
         await play_track(interaction, url, title, duration, elapsed, False)
 
 
-# -------- #
-# Trollaus #
-# -------- #
+# --------- #
+# Peikkoilu #
+# --------- #
 
 
 @bot.tree.command(name="gnome", description="gnome")
@@ -893,6 +893,8 @@ async def gnomeUser(interaction: discord.Interaction, target: discord.Member):
 # --------------- #
 # muita komentoja #
 # --------------- #
+
+# none yet
 
 
 # config utility funktiot
@@ -941,7 +943,7 @@ async def setchannel(interaction: discord.Interaction, channel: discord.TextChan
     await interaction.response.send_message(f"Kanavaksi vaihdettu {channel.mention}")
 
 
-CHANNEL_FILE = "/root/channelconfig.json"
+CHANNEL_FILE = "/home/rottabotti/channelconfig.json"
 TOKEN_FILE = "/opt/rottabotti/.env"
 
 channels = load_channels()  # {guild_id: channel_id}, ladataan apufunktion kautta

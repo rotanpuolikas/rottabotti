@@ -2,6 +2,8 @@
 
 tällä hetkellä rottabotti pystyy vaihtaan käyttäjien nimiä ja toimiin perus musabottina.
 
+älä pliis käytä rottabottia sun servulla, tää ei oo production ready ja sisältää todella paljon bugeja
+
 
 ### nimifunktiot:
   
@@ -23,7 +25,9 @@ tällä hetkellä rottabotti pystyy vaihtaan käyttäjien nimiä ja toimiin peru
 
 **/shuffle** sekoittaa jonon
 
-**/leagueofhappiness** soittaa livin da vida loca:n
+**/leagueofhappiness** soittaa livin da vida loca:ni
+
+**/hiljaisuus** soittaa satunnaisin intervallein valittuja äänitiedostoja, togglable
 
 ### Filtterit:
   
@@ -37,9 +41,9 @@ Kaikkia näitä edeltää **/filter**, eli koko syntaksi olisi **/filterbass**
 
 **anime** on basically nightcore filtteri, laittaa kimeän animetylleröäänen ja nopeuttaa biisiä
 
-**sigma** asettaa raten *0.85 originaalista, tehden biiseistä gigachad sigma versioita
+**sigma** asettaa raten *0.85 originaalista, tehden biiseistä gigachad sigma versioita (ironista)
   
-**filterpois** et varmaan koskaan arvaa mitä tää tekkee
+**pois** et varmaan koskaan arvaa mitä tää tekkee
 
 ### hassut funktiot:
 
