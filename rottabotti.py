@@ -41,6 +41,7 @@ suppress_after = {}  # {guild_id: bool}
 channels = {}  # {guild_id: channel_id}, ladataan myöhemmin apufunktiossa
 paused = {}  # {guild_id: stop_time} pidetään trackkia siitä onko biisi pausella
 mayhem = {}  # {guild_id: mayhem?} bool
+searching = {}  # {guild_id: searching?} bool
 
 
 MAX_QUERY_LENGTH = 100
@@ -259,6 +260,7 @@ async def check_voice_channel_empty(ctx, vc):
                 looping[guild_id] = []
                 start_times[guild_id] = []
                 mayhem[guild_id] = None
+                searching[guild_id] = False
                 await vc.disconnect()
                 return
 
@@ -384,10 +386,17 @@ async def join(interaction: discord.Interaction):
 @bot.tree.command(name="soita", description="soita musiikkia youtubesta")
 @app_commands.describe(query="biisin nimi tai youtube url")
 async def play(interaction: discord.Interaction, query: str):
+    guild_id = interaction.guild.id
+    if searching.get(guild_id):
+        if searching[guild_id]:
+            interaction.response.send_message(
+                "dawg hold your horses there, liian nopeita inputteja", ephemeral=True
+            )
+            return
     try:
         if not await connectVoice(interaction, True):
             return
-
+        searching[guild_id] = True
         await interaction.response.send_message(
             f"etitään youtubesta **{query}**", ephemeral=True
         )
@@ -397,7 +406,6 @@ async def play(interaction: discord.Interaction, query: str):
                 f"query failed sanitization", ephemeral=True
             )
 
-        guild_id = interaction.guild.id
         if guild_id not in queues:
             queues[guild_id] = []
 
@@ -406,11 +414,12 @@ async def play(interaction: discord.Interaction, query: str):
             bot.loop.create_task(check_voice_channel_empty(interaction, vc))
             # bot.loop.create_task(checkqueue_vc(interaction, vc))
             await songinfo(interaction, title, duration)
+            searching[guild_id] = False
             await play_track(interaction, url, title, duration)
         else:
             queues[guild_id].append((url, title, duration))
+            searching[guild_id] = False
             await songinfo(interaction, title, duration, False)
-
     except:
         return
 
@@ -439,8 +448,15 @@ async def show_queue(interaction: discord.Interaction):
 # /skipp komento
 @bot.tree.command(name="skipp", description="skippaa soiva biisi")
 async def skip(interaction: discord.Interaction):
+    guild_id = interaction.guild.id
     vc = interaction.guild.voice_client
     if vc and vc.is_playing():
+        if looping.get(guild_id):
+            await interaction.response.send_message(
+                "loopingin aikana ei voi skipata, tää on bugi jota en jaksa korjata just nyt",
+                ephemeral=True,
+            )
+            return
         vc.stop()
         await play_next(interaction)
         await interaction.response.send_message(
@@ -495,7 +511,8 @@ async def stop(interaction: discord.Interaction):
         current_track[guild_id] = []
         start_times[guild_id] = []
         looping[guild_id] = []
-        mayhem[guild_id] = None
+        mayhem[guild_id] = False
+        searching[guild_id] = False
         vc.stop()
         await vc.disconnect()
         await interaction.response.send_message("poistuttu kanavalta", ephemeral=False)
@@ -515,7 +532,8 @@ async def stop(interaction: discord.Interaction):
         current_track[guild_id] = []
         start_times[guild_id] = []
         looping[guild_id] = []
-        mayhem[guild_id] = None
+        mayhem[guild_id] = False
+        searching[guild_id] = False
         vc.stop()
         await vc.disconnect()
         await interaction.response.send_message("poistuttu kanavalta", ephemeral=False)
@@ -535,7 +553,8 @@ async def stop(interaction: discord.Interaction):
         current_track[guild_id] = []
         start_times[guild_id] = []
         looping[guild_id] = []
-        mayhem[guild_id] = None
+        mayhem[guild_id] = False
+        searching[guild_id] = False
         vc.stop()
         await vc.disconnect()
         await interaction.response.send_message("poistuttu kanavalta", ephemeral=False)
