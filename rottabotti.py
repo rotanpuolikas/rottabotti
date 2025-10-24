@@ -89,11 +89,17 @@ def ytdlp_find(ctx, query: str = "gangnam style"):
 
     # biisin tiedot, valitaan ensimmäinen joka löytyy
     else:
-        info = ytdl.extract_info(f"ytsearch: {query}", download=False)["entries"][0]
+        try:
+            info = ytdl.extract_info(f"ytsearch: {query}", download=False)["entries"][0]
+        except:
+            return None, None, None, False
+    if not info["url"] or not info["title"] or not info["duration"]:
+        return None, None, None, False
+
     url = info["url"]
     title = info["title"]
     duration = info["duration"]
-    return url, title, duration
+    return url, title, duration, True
 
 
 # soitetaan nykyne track
@@ -389,7 +395,7 @@ async def play(interaction: discord.Interaction, query: str):
     guild_id = interaction.guild.id
     if searching.get(guild_id):
         if searching[guild_id]:
-            interaction.response.send_message(
+            await interaction.response.send_message(
                 "dawg hold your horses there, liian nopeita inputteja", ephemeral=True
             )
             return
@@ -400,7 +406,17 @@ async def play(interaction: discord.Interaction, query: str):
         await interaction.response.send_message(
             f"etitään youtubesta **{query}**", ephemeral=True
         )
-        url, title, duration = ytdlp_find(interaction, query)
+        url, title, duration, success = ytdlp_find(interaction, query)
+
+        # if all else fails
+        if not success:
+            searching[guild_id] = False
+            await interaction.followup.send(
+                "age restricted video tai joku muu error tapahtu, unable to can",
+                ephemeral=True,
+            )
+            return
+
         if url == None or title == None:
             await interaction.followup.send(
                 f"query failed sanitization", ephemeral=True
@@ -897,7 +913,7 @@ async def gnomeUser(interaction: discord.Interaction, target: discord.Member):
             await channel.connect()
             await interaction.response.send_message("gnoming", ephemeral=True)
             vc = interaction.guild.voice_client
-            vc.play(discord.FFmpegPCMAudio("./gnomed.mp3"))
+            vc.play(discord.FFmpegPCMAudio("/home/rottabotti/audio/gnomed.mp3"))
             await asyncio.sleep(15.5)
             await vc.disconnect()
         except Exception as e:
