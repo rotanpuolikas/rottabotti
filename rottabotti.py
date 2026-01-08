@@ -499,6 +499,13 @@ async def join(interaction: discord.Interaction):
     await interaction.response.send_message("liitytty kanavalle")
 
 
+"""
+tää on ihan garbage fire, kirjaimellisesti vaan kopioin ton /soita komennon jutut
+en jaksanu tehä paremmin, ehkä jahka teen semmosen unified funktion, mut atm ei huvita
+kuitenki mennee joku rikki ja korjailen sitä pari päivää
+"""
+
+
 # /soitaseuraavaks
 @bot.tree.command(name="soitanext", description="laita biisi seuraavaks jonnoon")
 @app_commands.describe(query="biisin nimi tai youtube url")
@@ -744,6 +751,12 @@ async def loop(interaction: discord.Interaction, mode: str):
     await sendtochannel(interaction, temp)
 
 
+"""
+samaa tarinaa ku tolla /soitanext komennolla... ihan hyvin ois voinu yhistää
+ei jaksanu
+"""
+
+
 # /lopeta komennot, näitä on huvikseen monta
 @bot.tree.command(name="lopeta", description="heihei botti")
 async def stop(interaction: discord.Interaction):
@@ -873,6 +886,11 @@ async def league(interaction: discord.Interaction, are_you_sure: str):
 # --------- #
 # filtterit #
 # --------- #
+
+
+"""
+don't get me started... kaikki filttereihin liittyvä on ihan kauheeta
+"""
 
 
 # runko custom filtterille
@@ -1179,7 +1197,7 @@ def save_channels(data):
         json.dump(data, f, indent=4)
 
 
-# tärkee apufunktio, tän kautta laitetaan kaikki viestit kanavalle
+# tärkee apufunktio, tän kautta laitetaan kaikki non-response viestit kanavalle
 async def sendtochannel(ctx, message: str):
     guild_id = str(ctx.guild_id)
     if guild_id not in channels:
@@ -1195,6 +1213,7 @@ async def sendtochannel(ctx, message: str):
         await print("epäonnistuttu viestin lähettämisessä")
 
 
+# /configchannel, tällä configataan se kanava mihi kaikki viestit laitettaan (vaatii botti rebootin jonku takia)
 @bot.tree.command(
     name="configchannel", description="konfiguroi kanava johon viestit laitetaan"
 )
@@ -1207,6 +1226,7 @@ async def setchannel(interaction: discord.Interaction, channel: discord.TextChan
     await interaction.response.send_message(f"Kanavaksi vaihdettu {channel.mention}")
 
 
+# joo nää on täällä alhaalla jonku takia mut editoi oman maun mukkaan
 CHANNEL_FILE = "/home/rottabotti/channelconfig.json"
 TOKEN_FILE = "/opt/rottabotti/.env"
 
