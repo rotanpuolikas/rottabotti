@@ -147,7 +147,7 @@ async def enqueue_spotify_tracks(ctx, tracks: list[str]):
         queues[guild_id].append((url, title, duration))
         # await songinfo(ctx, title, duration, now=False)
         await asyncio.sleep(1)  # wait 1s between adding tracks
-    await ctx.followup.send("Playlistin biisit lisätty onnistuneesti", ephemeral = False)
+    await ctx.followup.send("Playlistin biisit lisätty onnistuneesti", ephemeral=False)
 
 
 # input sanitization
@@ -213,7 +213,7 @@ async def play_track(
     duration: int,
     seek_seconds: int = 0,
     autoplay: bool = True,
-    skipped: bool = False
+    skipped: bool = False,
 ):
     guild_id = ctx.guild.id
     vc = ctx.guild.voice_client
@@ -273,7 +273,6 @@ async def play_next(ctx, seek_seconds: int = 0, skipped: bool = False):
             url, title, duration = queues[guild_id].pop(0)
             await songinfo(ctx, title, duration)
             await play_track(ctx, url, title, duration, skipped)
-            print("täsä näi")
             return
         # jos queue tyhjä
         else:
@@ -288,7 +287,7 @@ async def songinfo(ctx, title, duration, now: bool = True, next: bool = False):
         whenplays = "Nyt soi: "
     elif next:
         whenplays = "Lisätty seuraavaksi: "
-    
+
     else:
         whenplays = "Lisätty jonoon: "
     seconds = duration
@@ -588,8 +587,6 @@ async def playnext(interaction: discord.Interaction, query: str):
         return
 
 
-
-
 # /soita komento
 @bot.tree.command(name="soita", description="soita musiikkia youtubesta")
 @app_commands.describe(query="biisin nimi tai youtube url")
@@ -705,22 +702,7 @@ async def skip(interaction: discord.Interaction):
     guild_id = interaction.guild.id
     vc = interaction.guild.voice_client
     if vc and vc.is_playing():
-        if looping.get(guild_id):
-            await interaction.response.send_message(
-                "loopingin aikana ei voi skipata, tää on bugi jota en jaksa korjata just nyt",
-                ephemeral=True,
-            )
-            return
-        try:
-            if queues.get(guild_id)[1]:
-                await interaction.response.send_message(
-                    "joo skippi ei vittu toimi jos on monta biisiä queuessa sori, korjaan jahka"
-                )
-                return
-        except:
-            pass
         vc.stop()
-        await play_next(interaction, 0, False)
         await interaction.response.send_message(
             "skipattiin seuraavaan kappaleeseen", ephemeral=False
         )
@@ -844,7 +826,6 @@ async def shuffle(interaction: discord.Interaction):
             await interaction.response.send_message("emmää voi shufflaa yhtä biisiä")
         else:
             await interaction.response.send_message("ei täällä soi mitään")
-
 
 
 # /leagueofhappiness
