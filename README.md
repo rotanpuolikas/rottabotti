@@ -4,6 +4,8 @@ tällä hetkellä rottabotti pystyy vaihtaan käyttäjien nimiä ja toimiin peru
 
 älä pliis käytä rottabottia sun servulla, tää ei oo production ready ja sisältää todella paljon bugeja
 
+tää sisältää tosi paljon hard coded juttuja, joten tän setuppaaminen aikoo olla melkosta tunkkausta, jos jonku takia semmoseen lähet. also paljon random audio tiedostoja, joita en githubbiin laita tekijänoikeussyistä
+
 
 ### nimifunktiot:
   
@@ -11,7 +13,9 @@ tällä hetkellä rottabotti pystyy vaihtaan käyttäjien nimiä ja toimiin peru
   
 ### Musabottifunktiot:
   
-**/soita** ettii youtubesta annettavan queryn, ja soittaa ensimmäisen tuloksen
+**/soita** ettii youtubesta annettavan queryn, ja soittaa ensimmäisen tuloksen, tälle voi myös antaa suoran youtube-linkin tai spotify kappale- tai soittolistalinkin. Soittaa silti youtubesta, mutta hakee metadatat spotifystä (vaatii spotify appiksen client id:n ja secretin)
+
+**/soitanext** sama ku ylempi, mutta laittaa biisin jonossa heti seuraavaksi
   
 **/lopeta** lopettaa musiikin toistamisen välittömästi, /poistu ja /bye tekee saman
   
@@ -28,6 +32,8 @@ tällä hetkellä rottabotti pystyy vaihtaan käyttäjien nimiä ja toimiin peru
 **/leagueofhappiness** soittaa livin da vida loca:ni
 
 **/hiljaisuus** soittaa satunnaisin intervallein valittuja äänitiedostoja, togglable
+
+**/configchannel** adminkomento jolla määritetään kanava, johon botti laittelee viestejä
 
 ### Filtterit:
   
@@ -47,4 +53,4 @@ Kaikkia näitä edeltää **/filter**, eli koko syntaksi olisi **/filterbass**
 
 ### hassut funktiot:
 
-**/gnome** gnomettaa targetin
+**/gnome** gnomettaa targetin, ei vaadi et oot samassa voicessa targetin kaa
