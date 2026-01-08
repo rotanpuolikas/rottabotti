@@ -8,7 +8,12 @@ import json
 import os
 import random
 
+import re
+import spotipy
+from spotipy.oauth2 import SpotifyClientCredentials
+
 # botin asetukset
+
 
 intents = discord.Intents.default()
 intents.members = True
@@ -45,6 +50,104 @@ searching = {}  # {guild_id: searching?} bool
 
 
 MAX_QUERY_LENGTH = 100
+
+clidfile = "/opt/rottabotti/client"
+clsecfile = "/opt/rottabotti/secret"
+
+with open(clidfile, "r") as clidf:
+    clid = clidf.read().strip()
+
+with open(clsecfile, "r") as clsecf:
+    clsec = clsecf.read().strip()
+
+sp = spotipy.Spotify(
+    auth_manager=SpotifyClientCredentials(
+        client_id=clid,
+        client_secret=clsec,
+    )
+)
+
+
+SPOTIFY_TRACK_REGEX = re.compile(r"https?://open\.spotify\.com/track/([a-zA-Z0-9]+)")
+SPOTIFY_PLAYLIST_REGEX = re.compile(
+    r"https?://open\.spotify\.com/(playlist|album)/([a-zA-Z0-9]+)"
+)
+
+
+def is_spotify_track(url: str) -> bool:
+    return bool(SPOTIFY_TRACK_REGEX.match(url))
+
+
+def spotify_to_query(spotify_url: str) -> str | None:
+    try:
+        track = sp.track(spotify_url)
+        artist = track["artists"][0]["name"]
+        title = track["name"]
+        return f"{artist} - {title}"
+    except Exception as e:
+        print(f"Spotify parse failed: {e}")
+        return None
+
+
+def spotify_playlist_to_queries(playlist_url: str) -> list[str]:
+    """
+    Returns a list of strings in "Artist - Title" format for all tracks in a Spotify playlist or album.
+    """
+    try:
+        results = (
+            sp.playlist_items(playlist_url)
+            if "playlist" in playlist_url
+            else sp.album_tracks(playlist_url)
+        )
+        tracks = []
+        for item in results["items"]:
+            # Spotify playlist returns dict with 'track'
+            track_info = item["track"] if "track" in item else item
+            artist = track_info["artists"][0]["name"]
+            title = track_info["name"]
+            tracks.append(f"{artist} - {title}")
+            if len(tracks) >= 50:
+                return tracks
+        return tracks
+    except Exception as e:
+        print(f"Spotify playlist parse failed: {e}")
+        return []
+
+
+async def enqueue_spotify_tracks(ctx, tracks: list[str]):
+    """
+    Add Spotify tracks to the queue gradually.
+    The first track is played immediately.
+    """
+    guild_id = ctx.guild.id
+    if guild_id not in queues:
+        queues[guild_id] = []
+
+    first_track_done = False
+
+    for track_query in tracks:
+        url, title, duration, success = ytdlp_find(ctx, track_query)
+        if not success:
+            print(f"Failed to fetch {track_query}")
+            continue
+
+        if not first_track_done:
+            # If nothing is playing, start first track immediately
+            vc = ctx.guild.voice_client
+            if not vc.is_playing():
+                await play_track(ctx, url, title, duration)
+                first_track_done = True
+                await songinfo(ctx, title, duration)
+                continue
+
+        vc = ctx.guild.voice_client
+        if not vc:
+            break
+        # Add the rest to the queue
+        queues[guild_id].append((url, title, duration))
+        # await songinfo(ctx, title, duration, now=False)
+        await asyncio.sleep(1)  # wait 1s between adding tracks
+    await ctx.followup.send("Playlistin biisit lisätty onnistuneesti", ephemeral = False)
 
 
 # input sanitization
@@ -110,6 +213,7 @@ async def play_track(
     duration: int,
     seek_seconds: int = 0,
     autoplay: bool = True,
+    skipped: bool = False
 ):
     guild_id = ctx.guild.id
     vc = ctx.guild.voice_client
@@ -140,7 +244,8 @@ async def play_track(
         # only trigger if not suppressed
 
         if not suppress_after.get(guild_id, False):
-            asyncio.run_coroutine_threadsafe(play_next(ctx), asyncloop)
+            if not skipped:
+                asyncio.run_coroutine_threadsafe(play_next(ctx), asyncloop)
 
     vc.play(
         discord.FFmpegPCMAudio(url, before_options=seek_opt, options=ffmpeg_opts),
@@ -151,7 +256,7 @@ async def play_track(
     start_times[guild_id] = time.time() - seek_seconds
 
 
-async def play_next(ctx, seek_seconds: int = 0):
+async def play_next(ctx, seek_seconds: int = 0, skipped: bool = False):
     guild_id = ctx.guild.id
 
     # jos looping päällä
@@ -160,23 +265,30 @@ async def play_next(ctx, seek_seconds: int = 0):
         url, title, duration = looping[guild_id].pop(0)
         looping[guild_id].append((url, title, duration))
         await play_track(ctx, url, title, duration)
+        return
 
     else:
         # jos queuessa tavaraa
         if queues.get(guild_id):
             url, title, duration = queues[guild_id].pop(0)
             await songinfo(ctx, title, duration)
-            await play_track(ctx, url, title, duration)
+            await play_track(ctx, url, title, duration, skipped)
+            print("täsä näi")
+            return
         # jos queue tyhjä
         else:
             current_track.pop(guild_id, None)
             start_times.pop(guild_id, None)
+            return
 
 
 # biisin nimi ja kesto tulostus
-async def songinfo(ctx, title, duration, now: bool = True):
+async def songinfo(ctx, title, duration, now: bool = True, next: bool = False):
     if now:
         whenplays = "Nyt soi: "
+    elif next:
+        whenplays = "Lisätty seuraavaksi: "
+    
     else:
         whenplays = "Lisätty jonoon: "
     seconds = duration
@@ -388,6 +500,96 @@ async def join(interaction: discord.Interaction):
     await interaction.response.send_message("liitytty kanavalle")
 
 
+# /soitaseuraavaks
+@bot.tree.command(name="soitanext", description="laita biisi seuraavaks jonnoon")
+@app_commands.describe(query="biisin nimi tai youtube url")
+async def playnext(interaction: discord.Interaction, query: str):
+    guild_id = interaction.guild.id
+    if searching.get(guild_id):
+        if searching[guild_id]:
+            await interaction.response.send_message(
+                "dawg hold your horses there, liian nopeita inputteja", ephemeral=True
+            )
+            return
+    try:
+        if not await connectVoice(interaction, True):
+            return
+        searching[guild_id] = True
+        await interaction.response.send_message(
+            f"etitään youtubesta **{query}**", ephemeral=True
+        )
+        # Spotify link support
+        if SPOTIFY_TRACK_REGEX.match(query):
+            # Single track
+            spotify_query = spotify_to_query(query)
+            if not spotify_query:
+                searching[guild_id] = False
+                await interaction.followup.send(
+                    "Spotify linkin lukeminen epäonnistui", ephemeral=True
+                )
+                return
+            query = spotify_query
+
+        elif SPOTIFY_PLAYLIST_REGEX.match(query):
+            # Playlist / album
+            tracks = spotify_playlist_to_queries(query)
+            if not tracks:
+                searching[guild_id] = False
+                await interaction.followup.send(
+                    "Spotify playlistin lukeminen epäonnistui", ephemeral=True
+                )
+                return
+
+            searching[guild_id] = False
+            await interaction.followup.send(
+                f"Lisätään {len(tracks)} kappaletta Spotify playlististä...",
+                ephemeral=True,
+            )
+            if len(tracks) == 50:
+                await interaction.followup.send(
+                    f"Playlistin maksimikoko on 50 kappaletta, tää on temporary limit",
+                    ephemeral=True,
+                )
+
+            # Start a background task to enqueue tracks gradually
+            bot.loop.create_task(enqueue_spotify_tracks(interaction, tracks))
+            return
+        url, title, duration, success = ytdlp_find(interaction, query)
+
+        # if all else fails
+        if not success:
+            searching[guild_id] = False
+            await interaction.followup.send(
+                "age restricted video tai joku muu error tapahtu, unable to can",
+                ephemeral=True,
+            )
+            return
+
+        if url == None or title == None:
+            await interaction.followup.send(
+                f"query failed sanitization", ephemeral=True
+            )
+
+        if guild_id not in queues:
+            queues[guild_id] = []
+
+        vc = interaction.guild.voice_client
+        if not vc.is_playing():
+            bot.loop.create_task(check_voice_channel_empty(interaction, vc))
+            # bot.loop.create_task(checkqueue_vc(interaction, vc))
+            await songinfo(interaction, title, duration)
+            searching[guild_id] = False
+            await play_track(interaction, url, title, duration)
+        else:
+            queues[guild_id].insert(0, (url, title, duration))
+            searching[guild_id] = False
+            await songinfo(interaction, title, duration, False, True)
+    except:
+        return
+
+
+
+
 # /soita komento
 @bot.tree.command(name="soita", description="soita musiikkia youtubesta")
 @app_commands.describe(query="biisin nimi tai youtube url")
@@ -406,6 +608,42 @@ async def play(interaction: discord.Interaction, query: str):
         await interaction.response.send_message(
             f"etitään youtubesta **{query}**", ephemeral=True
         )
+        # Spotify link support
+        if SPOTIFY_TRACK_REGEX.match(query):
+            # Single track
+            spotify_query = spotify_to_query(query)
+            if not spotify_query:
+                searching[guild_id] = False
+                await interaction.followup.send(
+                    "Spotify linkin lukeminen epäonnistui", ephemeral=True
+                )
+                return
+            query = spotify_query
+
+        elif SPOTIFY_PLAYLIST_REGEX.match(query):
+            # Playlist / album
+            tracks = spotify_playlist_to_queries(query)
+            if not tracks:
+                searching[guild_id] = False
+                await interaction.followup.send(
+                    "Spotify playlistin lukeminen epäonnistui", ephemeral=True
+                )
+                return
+
+            searching[guild_id] = False
+            await interaction.followup.send(
+                f"Lisätään {len(tracks)} kappaletta Spotify playlististä...",
+                ephemeral=True,
+            )
+            if len(tracks) == 50:
+                await interaction.followup.send(
+                    f"Playlistin maksimikoko on 50 kappaletta, tää on temporary limit",
+                    ephemeral=True,
+                )
+
+            # Start a background task to enqueue tracks gradually
+            bot.loop.create_task(enqueue_spotify_tracks(interaction, tracks))
+            return
         url, title, duration, success = ytdlp_find(interaction, query)
 
         # if all else fails
@@ -473,8 +711,16 @@ async def skip(interaction: discord.Interaction):
                 ephemeral=True,
             )
             return
+        try:
+            if queues.get(guild_id)[1]:
+                await interaction.response.send_message(
+                    "joo skippi ei vittu toimi jos on monta biisiä queuessa sori, korjaan jahka"
+                )
+                return
+        except:
+            pass
         vc.stop()
-        await play_next(interaction)
+        await play_next(interaction, 0, False)
         await interaction.response.send_message(
             "skipattiin seuraavaan kappaleeseen", ephemeral=False
         )
@@ -600,6 +846,8 @@ async def shuffle(interaction: discord.Interaction):
             await interaction.response.send_message("ei täällä soi mitään")
 
 
+
+# /leagueofhappiness
 @bot.tree.command(name="leagueofhappiness", description="maldataan yhdessä")
 async def league(interaction: discord.Interaction, are_you_sure: str):
     guild_id = interaction.guild_id
