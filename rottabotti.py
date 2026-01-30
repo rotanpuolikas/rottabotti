@@ -869,8 +869,12 @@ async def league(interaction: discord.Interaction, are_you_sure: str):
             "joku muu meni vituilleen", ephemeral=True
         )
 
+    url, title, duration, success = ytdlp_find(interaction, "livin da vida loca")
+    if not success:
+        interaction.response.send_message("not livin da vida loca (error happened)")
+        return
+
     await interaction.response.send_message("livin da vida loca baby")
-    url, title, duration = ytdlp_find(interaction, "livin da vida loca")
 
     vc = interaction.guild.voice_client
     if not vc.is_playing():
