@@ -51,8 +51,8 @@ searching = {}  # {guild_id: searching?} bool
 
 MAX_QUERY_LENGTH = 100
 
-clidfile = "/opt/rottabotti/client"
-clsecfile = "/opt/rottabotti/secret"
+clidfile = "/opt/botti/spoticlient"
+clsecfile = "/opt/botti/spotisecret"
 
 with open(clidfile, "r") as clidf:
     clid = clidf.read().strip()
@@ -321,7 +321,7 @@ async def connectVoice(ctx, playsound: bool = False):
             await channel.connect()
             if playsound:
                 vc = ctx.guild.voice_client
-                vc.play(discord.FFmpegPCMAudio("/home/rottabotti/audio/joinsound.mp3"))
+                vc.play(discord.FFmpegPCMAudio("./audio/joinsound.mp3"))
             return True
         except Exception as e:
             await ctx.response.send_message(f"liittyminen epäonnistui, exception: {e}")
@@ -343,9 +343,9 @@ async def randomsound(ctx):
     guild_id = ctx.guild.id
 
     audios = [
-        "/home/rottabotti/audio/teemo1.ogx",
-        "/home/rottabotti/audio/teemo2.ogx",
-        "/home/rottabotti/audio/teemo3.ogx",
+        "./audio/teemo1.ogx",
+        "./audio/teemo2.ogx",
+        "./audio/teemo3.ogx",
     ]
 
     while mayhem[guild_id]:
@@ -1231,8 +1231,8 @@ async def setchannel(interaction: discord.Interaction, channel: discord.TextChan
 
 
 # joo nää on täällä alhaalla jonku takia mut editoi oman maun mukkaan
-CHANNEL_FILE = "/home/rottabotti/channelconfig.json"
-TOKEN_FILE = "/opt/rottabotti/.env"
+CHANNEL_FILE = "./channelconfig.json"
+TOKEN_FILE = "/opt/botti/rottabotti"
 
 channels = load_channels()  # {guild_id: channel_id}, ladataan apufunktion kautta
 
