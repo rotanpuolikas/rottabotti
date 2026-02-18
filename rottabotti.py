@@ -319,9 +319,22 @@ async def connectVoice(ctx, playsound: bool = False):
     if not ctx.guild.voice_client:
         try:
             await channel.connect()
+            guild_id = ctx.guild_id
+            queues.pop(guild_id, None)
+            current_track.pop(guild_id, None)
+            start_times.pop(guild_id, None)
+            looping.pop(guild_id, None)
+            filters.pop(guild_id, None)
+            mayhem.pop(guild_id, None)
+            searching.pop(guild_id, None)
+            searching[guild_id] = False
             if playsound:
                 vc = ctx.guild.voice_client
                 vc.play(discord.FFmpegPCMAudio("./audio/joinsound.mp3"))
+
+                while vc.is_playing():
+                    await asyncio.sleep(0.1)
+
             return True
         except Exception as e:
             await ctx.response.send_message(f"liittyminen epäonnistui, exception: {e}")
@@ -371,13 +384,13 @@ async def check_voice_channel_empty(ctx, vc):
         if len(non_bot) == 0:
             wait_time += 1
             if wait_time >= 5:
-                filters[guild_id] = []
-                queues[guild_id] = []
-                current_track[guild_id] = ()
-                looping[guild_id] = []
-                start_times[guild_id] = []
-                mayhem[guild_id] = None
-                searching[guild_id] = False
+                queues.pop(guild_id, None)
+                current_track.pop(guild_id, None)
+                start_times.pop(guild_id, None)
+                looping.pop(guild_id, None)
+                filters.pop(guild_id, None)
+                mayhem.pop(guild_id, None)
+                searching.pop(guild_id, None)
                 await vc.disconnect()
                 return
 
@@ -580,6 +593,12 @@ async def playnext(interaction: discord.Interaction, query: str):
             queues[guild_id] = []
 
         vc = interaction.guild.voice_client
+
+        if not vc or not vc.is_connected():
+            await interaction.followup.send('en oo vielä yhistäny (temp bug thing, tästä joudutaan kärsimään hetki)', ephemeral=True)
+            searching[guild_id] = False
+            return
+        
         if not vc.is_playing():
             bot.loop.create_task(check_voice_channel_empty(interaction, vc))
             # bot.loop.create_task(checkqueue_vc(interaction, vc))
@@ -668,6 +687,12 @@ async def play(interaction: discord.Interaction, query: str):
             queues[guild_id] = []
 
         vc = interaction.guild.voice_client
+
+        if not vc or not vc.is_connected():
+            await interaction.followup.send('en oo vielä yhistäny (temp bug thing, tästä joudutaan kärsimään hetki)', ephemeral=True)
+            searching[guild_id] = False
+            return
+        
         if not vc.is_playing():
             bot.loop.create_task(check_voice_channel_empty(interaction, vc))
             # bot.loop.create_task(checkqueue_vc(interaction, vc))
@@ -678,6 +703,9 @@ async def play(interaction: discord.Interaction, query: str):
             queues[guild_id].append((url, title, duration))
             searching[guild_id] = False
             await songinfo(interaction, title, duration, False)
+
+        print(queues[guild_id])
+        print(current_track[guild_id])
     except:
         return
 
@@ -686,9 +714,11 @@ async def play(interaction: discord.Interaction, query: str):
 @bot.tree.command(name="jono", description="näytä jono")
 async def show_queue(interaction: discord.Interaction):
     guild_id = interaction.guild.id
+
     if guild_id not in queues or not queues[guild_id]:
         await interaction.response.send_message("jono näyttää tyhjältä", ephemeral=True)
         return
+
     queue_list = ""
     if looping.get(guild_id):
         for entry in looping[guild_id]:
@@ -696,12 +726,16 @@ async def show_queue(interaction: discord.Interaction):
     else:
         for entry in queues[guild_id]:
             queue_list += f"\n{entry[1]}"
+
+    now_playing = "tyhjää täynnä"
+    if guild_id in current_track and current_track[guild_id]:
+        now_playing = current_track[guild_id][1]
+
     await interaction.response.send_message("done", ephemeral=True)
     await sendtochannel(
         interaction,
-        f"Nyt soi: **{current_track[guild_id][1]}**\n\nSeuraavaksi jonossa:**{queue_list}**",
+        f"Nyt soi: **{now_playing}**\n\nSeuraavaksi jonossa:**{queue_list}**",
     )
-
 
 # /skipp komento
 @bot.tree.command(name="skipp", description="skippaa soiva biisi")
@@ -763,13 +797,13 @@ async def stop(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
     guild_id = interaction.guild.id
     if vc:
-        filters[guild_id] = []
-        queues[guild_id] = []
-        current_track[guild_id] = []
-        start_times[guild_id] = []
-        looping[guild_id] = []
-        mayhem[guild_id] = False
-        searching[guild_id] = False
+        queues.pop(guild_id, None)
+        current_track.pop(guild_id, None)
+        start_times.pop(guild_id, None)
+        looping.pop(guild_id, None)
+        filters.pop(guild_id, None)
+        mayhem.pop(guild_id, None)
+        searching.pop(guild_id, None)
         vc.stop()
         await vc.disconnect()
         await interaction.response.send_message("poistuttu kanavalta", ephemeral=False)
@@ -784,13 +818,13 @@ async def stop(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
     guild_id = interaction.guild.id
     if vc:
-        filters[guild_id] = []
-        queues[guild_id] = []
-        current_track[guild_id] = []
-        start_times[guild_id] = []
-        looping[guild_id] = []
-        mayhem[guild_id] = False
-        searching[guild_id] = False
+        queues.pop(guild_id, None)
+        current_track.pop(guild_id, None)
+        start_times.pop(guild_id, None)
+        looping.pop(guild_id, None)
+        filters.pop(guild_id, None)
+        mayhem.pop(guild_id, None)
+        searching.pop(guild_id, None)
         vc.stop()
         await vc.disconnect()
         await interaction.response.send_message("poistuttu kanavalta", ephemeral=False)
@@ -805,13 +839,13 @@ async def stop(interaction: discord.Interaction):
     vc = interaction.guild.voice_client
     guild_id = interaction.guild.id
     if vc:
-        filters[guild_id] = []
-        queues[guild_id] = []
-        current_track[guild_id] = []
-        start_times[guild_id] = []
-        looping[guild_id] = []
-        mayhem[guild_id] = False
-        searching[guild_id] = False
+        queues.pop(guild_id, None)
+        current_track.pop(guild_id, None)
+        start_times.pop(guild_id, None)
+        looping.pop(guild_id, None)
+        filters.pop(guild_id, None)
+        mayhem.pop(guild_id, None)
+        searching.pop(guild_id, None)
         vc.stop()
         await vc.disconnect()
         await interaction.response.send_message("poistuttu kanavalta", ephemeral=False)
