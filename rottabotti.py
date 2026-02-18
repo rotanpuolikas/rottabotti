@@ -704,8 +704,6 @@ async def play(interaction: discord.Interaction, query: str):
             searching[guild_id] = False
             await songinfo(interaction, title, duration, False)
 
-        print(queues[guild_id])
-        print(current_track[guild_id])
     except:
         return
 
